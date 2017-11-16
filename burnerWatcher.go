@@ -43,6 +43,34 @@ InsertedDatetime
 }
 */
 
+func sendTemperatures() {
+	fmt.Println("Sending temp data.")
+}
+
+func tempLogger(signal chan int) {
+	active := 0
+	postp := 0
+	loop := true
+	for loop == true {
+		select {
+		case active = <-signal:
+		default:
+			if active == 1 || postp > 0 {
+				sendTemperatures()
+				time.Sleep(5 * time.Second)
+				if active == 1 {
+					postp = 6
+				}
+			} else if active == 2 {
+				loop = false
+			}
+			if postp > 0 {
+				postp--
+			}
+		}
+	}
+}
+
 func sendEntry(url string, startTime time.Time, endTime time.Time) {
 	fmt.Println("Entry to send: ", startTime, endTime, endTime.Sub(startTime))
 	log.Info("Sent entry to log.")
@@ -52,24 +80,6 @@ func mainloop() {
 	exitSignal := make(chan os.Signal)
 	signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGTERM)
 	<-exitSignal
-}
-
-func tempLogger(signal chan int) {
-	msg := 0
-	loop := true
-	for loop == true {
-		select {
-		case msg = <-signal:
-		default:
-			if msg == 1 {
-				fmt.Println("Sending tempdata")
-				time.Sleep(5 * time.Second)
-			} else if msg == 2 {
-				loop = false
-			}
-		}
-	}
-	fmt.Println("tempLogger ending.")
 }
 
 func main() {
