@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const version = ".01a-2017Nov18"
+const version = ".01-2017Nov19"
 
 const usage = `
 burnerWatcher
@@ -51,7 +51,7 @@ func sendTemperatures() {
 	var netClient = &http.Client{
 		Timeout: time.Second * 30,
 	}
-	log.Debugf("Sending GET to: %s\n", configFile.urlTempServer)
+	log.Debugf("Sending GET to: %s", configFile.urlTempServer)
 	response, err := netClient.Get(configFile.urlTempServer)
 	if err != nil {
 		log.Errorf("The HTTP request failed with error %s\n", err)
@@ -95,7 +95,7 @@ func sendEntry(url string, startTime time.Time, endTime time.Time) {
 	entry.StartTime = startTime.Format(time.RFC3339)
 	entry.EndTime = endTime.Format(time.RFC3339)
 	body, _ := json.Marshal(entry)
-	log.Debugf("Sending POST to: %s\n", configFile.urlTimeServer)
+	log.Debugf("Sending POST to: %s", configFile.urlTimeServer)
 	response, err := http.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		log.Errorf("The HTTP request failed with error %s\n", err)
@@ -150,17 +150,18 @@ func main() {
 
 	pin.Watch(gpio.EdgeBoth, func(pin *gpio.Pin) {
 		LastState = pin.Read()
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 		newState := pin.Read()
 		if newState == LastState {
 			PinState = newState
 		}
 		if PinState == gpio.High {
-			StartTime = time.Now()
-			log.Info("Started time")
+			StartTime = time.Now().UTC()
+			log.Info("Started timing")
 			signal <- 1
 		} else if (PinState == gpio.Low) && (StartTime != time.Time{}) {
-			endTime := time.Now()
+			log.Info("Ended timing")
+			endTime := time.Now().UTC()
 			sendEntry(configFile.urlTimeServer, StartTime, endTime)
 			StartTime = time.Time{}
 			signal <- 0
