@@ -24,7 +24,15 @@ const version = ".01-2017Nov19"
 const usage = `
 burnerWatcher
 
-Usage: burnerWatcher
+Usage: httpLogger [options]
+
+Options:
+ -d LEVEL  Set logging level.
+             i = Info
+             e = Error
+             d = Debug
+             [default: e]
+ -v         Show version.
 `
 
 type RunEntry struct {
@@ -127,13 +135,20 @@ func main() {
 		configFile.urlTempServer = viper.GetString("Servers.temperatures")
 		configFile.urlTimeServer = viper.GetString("Servers.time")
 	}
-
-	_, _ = docopt.Parse(usage, nil, true, version, false)
 	Formatter := new(log.TextFormatter)
 	Formatter.TimestampFormat = "02-Jan-2006 15:04:05"
 	Formatter.FullTimestamp = true
 	log.SetFormatter(Formatter)
-	log.SetLevel(log.DebugLevel)
+	arguments, _ := docopt.Parse(usage, nil, true, version, false)
+	logLevel := arguments["-d"]
+	switch logLevel {
+	case "d":
+		log.SetLevel(log.DebugLevel)
+	case "i":
+		log.SetLevel(log.InfoLevel)
+	default:
+		log.SetLevel(log.ErrorLevel)
+	}
 
 	log.Info("burnerWatcher " + version + " starting")
 	signal := make(chan int)
