@@ -2,49 +2,65 @@
 
 package main
 
-import "fmt"
-import "github.com/warthog618/gpio"
-import "github.com/docopt/docopt-go"
-import "os"
-import "os/signal"
-import "syscall"
-import "time"
-import log "github.com/Sirupsen/logrus"
+import (
+	"bytes"
+	"encoding/json"
+	log "github.com/Sirupsen/logrus"
+	"github.com/docopt/docopt-go"
+	"github.com/spf13/viper"
+	"io/ioutil"
+	//	"github.com/pkg/errors"
+	"github.com/warthog618/gpio"
+	"net/http"
+	"os"
+	"os/signal"
+	"runtime"
+	"syscall"
+	"time"
+)
 
-const version = ".01a-2017Nov15"
+const version = ".01a-2017Nov18"
 
 const usage = `
 burnerWatcher
 
-Usage: burnerWatcher <url>
+Usage: burnerWatcher
 `
 
-var PinState gpio.Level
-var LastState gpio.Level
-var StartTime = time.Time{}
-
-/*
-func storeEntry(db *sql.DB, startTime time.Time, endTime time.Time) {
-	sql_additem := `
-INSERT INTO runtimes(
-StartTime,
-EndTime,
-Duration,
-InsertedDatetime
-) values(?, ?, ?, CURRENT_TIMESTAMP)
-`
-	stmt, err := db.Prepare(sql_additem)
-	if err != nil { panic(err) }
-	defer stmt.Close()
-
-	_, err2 := stmt.Exec(startTime, endTime, endTime.Sub(startTime))
-	if err2 != nil { panic(err2) }
-	log.Println ("Logged run time.")
+type RunEntry struct {
+	StartTime string `json:"startTime"`
+	EndTime   string `json:"endTime"`
 }
-*/
+
+type ConfigFile struct {
+	urlTempServer string
+	urlTimeServer string
+}
+
+var (
+	PinState   gpio.Level
+	LastState  gpio.Level
+	StartTime  = time.Time{}
+	configFile ConfigFile
+)
 
 func sendTemperatures() {
-	fmt.Println("Sending temp data.")
+	var status int
+	var body []byte
+
+	var netClient = &http.Client{
+		Timeout: time.Second * 30,
+	}
+	log.Debugf("Sending GET to: %s\n", configFile.urlTempServer)
+	response, err := netClient.Get(configFile.urlTempServer)
+	if err != nil {
+		log.Errorf("The HTTP request failed with error %s\n", err)
+	} else {
+		status = response.StatusCode
+		body, _ = ioutil.ReadAll(response.Body)
+	}
+	log.Info(status, " - "+string(body))
+
 }
 
 func tempLogger(signal chan int) {
@@ -59,7 +75,7 @@ func tempLogger(signal chan int) {
 				sendTemperatures()
 				time.Sleep(5 * time.Second)
 				if active == 1 {
-					postp = 6
+					postp = 6 // 5 passes
 				}
 			} else if active == 2 {
 				loop = false
@@ -72,8 +88,22 @@ func tempLogger(signal chan int) {
 }
 
 func sendEntry(url string, startTime time.Time, endTime time.Time) {
-	fmt.Println("Entry to send: ", startTime, endTime, endTime.Sub(startTime))
-	log.Info("Sent entry to log.")
+
+	var entry RunEntry
+	var status int
+
+	entry.StartTime = startTime.Format(time.RFC3339)
+	entry.EndTime = endTime.Format(time.RFC3339)
+	body, _ := json.Marshal(entry)
+	log.Debugf("Sending POST to: %s\n", configFile.urlTimeServer)
+	response, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Errorf("The HTTP request failed with error %s\n", err)
+	} else {
+		status = response.StatusCode
+		body, _ = ioutil.ReadAll(response.Body)
+	}
+	log.Info(status, " - "+string(body))
 }
 
 func mainloop() {
@@ -83,22 +113,35 @@ func mainloop() {
 }
 
 func main() {
-	arguments, _ := docopt.Parse(usage, nil, true, version, false)
-	url := arguments["<url>"].(string)
+	var (
+		err error
+	)
+	defer os.Exit(0)
 
+	viper.SetConfigFile("burnerWatcher.toml")
+	//  viper.AddConfigPath(".")
+	if err = viper.ReadInConfig(); err != nil {
+		log.Errorf("Config file error: %s", err)
+		runtime.Goexit()
+	} else {
+		configFile.urlTempServer = viper.GetString("Servers.temperatures")
+		configFile.urlTimeServer = viper.GetString("Servers.time")
+	}
+
+	_, _ = docopt.Parse(usage, nil, true, version, false)
 	Formatter := new(log.TextFormatter)
 	Formatter.TimestampFormat = "02-Jan-2006 15:04:05"
 	Formatter.FullTimestamp = true
 	log.SetFormatter(Formatter)
+	log.SetLevel(log.DebugLevel)
 
-	log.Info("Logging data to ", url)
-
+	log.Info("burnerWatcher " + version + " starting")
 	signal := make(chan int)
 	go tempLogger(signal)
 
-	if err := gpio.Open(); err != nil {
-		log.Println(err)
-		os.Exit(1)
+	if err = gpio.Open(); err != nil {
+		log.Errorf("GPIO pin open failed: %s", err)
+		runtime.Goexit()
 	}
 	defer gpio.Close()
 
@@ -118,7 +161,7 @@ func main() {
 			signal <- 1
 		} else if (PinState == gpio.Low) && (StartTime != time.Time{}) {
 			endTime := time.Now()
-			sendEntry(url, StartTime, endTime)
+			sendEntry(configFile.urlTimeServer, StartTime, endTime)
 			StartTime = time.Time{}
 			signal <- 0
 		}

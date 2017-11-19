@@ -1,0 +1,3 @@
+[Servers]
+temperatures = "http://filed:8000/temps/run"
+time = "http://filed:8000/burnerLogger"
