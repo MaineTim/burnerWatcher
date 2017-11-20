@@ -80,6 +80,7 @@ func tempLogger(signal chan int) {
 		case active = <-signal:
 		default:
 			if active == 1 || postp > 0 {
+				log.Debugf("tempLogger passes: %d", postp)
 				sendTemperatures()
 				time.Sleep(5 * time.Second)
 				if active == 1 {
@@ -170,7 +171,7 @@ func main() {
 		if newState == LastState {
 			PinState = newState
 		}
-		if PinState == gpio.High {
+		if (PinState == gpio.High) && (StartTime == time.Time{}) {
 			StartTime = time.Now().UTC()
 			log.Info("Started timing")
 			signal <- 1
