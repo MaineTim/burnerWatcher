@@ -82,9 +82,9 @@ func tempLogger(signal chan int) {
 			if active == 1 || postp > 0 {
 				log.Debugf("tempLogger passes: %d", postp)
 				sendTemperatures()
-				time.Sleep(5 * time.Second)
+				time.Sleep(1 * time.Minute)
 				if active == 1 {
-					postp = 6 // 5 passes
+					postp = 11 // 10 passes
 				}
 			} else if active == 2 {
 				loop = false
@@ -111,8 +111,8 @@ func sendEntry(url string, startTime time.Time, endTime time.Time) {
 	} else {
 		status = response.StatusCode
 		body, _ = ioutil.ReadAll(response.Body)
+		log.Info(status, " - "+string(body))
 	}
-	log.Info(status, " - "+string(body))
 }
 
 func mainloop() {
