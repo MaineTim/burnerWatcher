@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const version = ".01-2017Nov19"
+const version = ".01a-2017Nov21"
 
 const usage = `
 burnerWatcher
@@ -41,8 +41,9 @@ type RunEntry struct {
 }
 
 type ConfigFile struct {
-	urlTempServer string
-	urlTimeServer string
+	urlSignalServer string
+	urlTempServer   string
+	urlTimeServer   string
 }
 
 var (
@@ -71,32 +72,25 @@ func sendTemperatures() {
 
 }
 
-func tempLogger(signal chan int) {
-	active := 0
-	postp := 0
-	loop := true
-	for loop == true {
-		select {
-		case active = <-signal:
-		default:
-			if active == 1 || postp > 0 {
-				log.Debugf("tempLogger passes: %d", postp)
-				sendTemperatures()
-				time.Sleep(1 * time.Minute)
-				if active == 1 {
-					postp = 11 // 10 passes
-				}
-			} else if active == 2 {
-				loop = false
-			}
-			if postp > 0 {
-				postp--
-			}
-		}
+func sendStartSignal() {
+
+	var status int
+
+	log.Debugf("Sending GET to: %s", configFile.urlSignalServer)
+	var netClient = &http.Client{
+		Timeout: time.Second * 30,
+	}
+	response, err := netClient.Get(configFile.urlSignalServer)
+	if err != nil {
+		log.Errorf("The HTTP request failed with error %s\n", err)
+	} else {
+		status = response.StatusCode
+		body, _ := ioutil.ReadAll(response.Body)
+		log.Info(status, " - "+string(body))
 	}
 }
 
-func sendEntry(url string, startTime time.Time, endTime time.Time) {
+func sendRunEntry(url string, startTime time.Time, endTime time.Time) {
 
 	var entry RunEntry
 	var status int
@@ -133,6 +127,7 @@ func main() {
 		log.Errorf("Config file error: %s", err)
 		runtime.Goexit()
 	} else {
+		configFile.urlSignalServer = viper.GetString("Servers.signal")
 		configFile.urlTempServer = viper.GetString("Servers.temperatures")
 		configFile.urlTimeServer = viper.GetString("Servers.time")
 	}
@@ -152,8 +147,6 @@ func main() {
 	}
 
 	log.Info("burnerWatcher " + version + " starting")
-	signal := make(chan int)
-	go tempLogger(signal)
 
 	if err = gpio.Open(); err != nil {
 		log.Errorf("GPIO pin open failed: %s", err)
@@ -173,18 +166,16 @@ func main() {
 		}
 		if (PinState == gpio.High) && (StartTime == time.Time{}) {
 			StartTime = time.Now().UTC()
+			sendStartSignal()
 			log.Info("Started timing")
-			signal <- 1
 		} else if (PinState == gpio.Low) && (StartTime != time.Time{}) {
 			log.Info("Ended timing")
 			endTime := time.Now().UTC()
-			sendEntry(configFile.urlTimeServer, StartTime, endTime)
+			sendRunEntry(configFile.urlTimeServer, StartTime, endTime)
 			StartTime = time.Time{}
-			signal <- 0
 		}
 	})
 	defer pin.Unwatch()
 
 	mainloop()
-	signal <- 2
 }
