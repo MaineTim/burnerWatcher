@@ -5,18 +5,20 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/docopt/docopt-go"
 	"github.com/spf13/viper"
-	"io/ioutil"
 	//	"github.com/pkg/errors"
-	"github.com/warthog618/gpio"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
 	"time"
+
+	"github.com/warthog618/gpio"
 )
 
 const version = ".01a-2017Nov21"
