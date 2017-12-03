@@ -1,4 +1,5 @@
-// burnerWatcher
+// burnerWatcher monitors a signal from an oil burner and sends run log information
+// to an httpServer instance.
 
 package main
 
@@ -55,6 +56,9 @@ var (
 	configFile ConfigFile
 )
 
+// Sends an HTTP GET request to httpLogger to record a
+// one-shot temperature set. Not surrently supported.
+
 func sendTemperatures() {
 	var status int
 	var body []byte
@@ -74,6 +78,9 @@ func sendTemperatures() {
 
 }
 
+// Sends an HTTP GET request to httpLogger when the burner fires
+// that starts it collecting temperature info.
+
 func sendStartSignal() {
 
 	var status int
@@ -91,6 +98,9 @@ func sendStartSignal() {
 		log.Info(status, " - "+string(body))
 	}
 }
+
+// Sends an HTTP POST request to httpLogger to store the burner
+// run times, and signal end of run.
 
 func sendRunEntry(url string, startTime time.Time, endTime time.Time) {
 
@@ -124,7 +134,6 @@ func main() {
 	defer os.Exit(0)
 
 	viper.SetConfigFile("burnerWatcher.toml")
-	//  viper.AddConfigPath(".")
 	if err = viper.ReadInConfig(); err != nil {
 		log.Errorf("Config file error: %s", err)
 		runtime.Goexit()
@@ -158,6 +167,11 @@ func main() {
 
 	pin := gpio.NewPin(23)
 	pin.Input()
+
+	// GPIO Pin 23 is connected to an MID400 opto-isolator,
+	// which is tied to the control line for the burner.
+	// Pin HIGH means line LOW, burner firing. (We don't
+	// account for power failures.)
 
 	pin.Watch(gpio.EdgeBoth, func(pin *gpio.Pin) {
 		LastState = pin.Read()

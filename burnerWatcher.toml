@@ -1,4 +1,4 @@
 [Servers] 
-signal = "http://filed:8000/temps/run"
-temperatures = "http://filed:8000/temps/store"
-time = "http://filed:8000/burnerlogger"
+signal = "http://filed:5000/temps/run"
+temperatures = "http://filed:5000/temps/store"
+time = "http://filed:5000/burnerlogger"
